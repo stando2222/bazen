@@ -1,64 +1,96 @@
 #picaxe 20M2
-REM symboly
+; Regulacia bazenu
+; version 0.2
+; date 21.10.2015
+
+; ---------------------
+; symbols
+
+; input pins
 symbol iTin 	= C.1
 symbol iTout	= C.2
+
+; output pins
 symbol oSerSolOn	= B.0
 symbol oSerSolOff = B.1
 symbol oPump	= B.1
 symbol oDisplay	= B.3
 symbol oUVLamp	= B.4
 
-symbol vTin		= B10
-symbol vTout	= B11
-symbol vLastSolar = B12
+symbol hi2csda	= B.5
+symbol hi2cscl	= B.7
 
-symbol sSolarOpen	= 225
-symbol sSolarClose= 75
+; variables
+symbol vMode	= b10
+symbol vLastMin	= b11
+symbol vTin		= b12
+symbol vTout	= b13
+symbol vLastSolar = b14
 
+; temporary
+symbol seconds	= b0
+symbol mins		= b1
+symbol hour		= b2
+symbol day		= b3
+symbol date		= b4
+symbol month	= b5
+symbol year		= b6
+
+symbol val1		= b7
+symbol val2		= b8
+
+
+
+; constants
 symbol vTmin	= 25
 symbol vTmax	= 29
 
+symbol ModeHeat	= 1
+symbol ModeCool	= 2
+symbol ModeKeep	= 3
+
+
+
+; ---------------------
+; initialization
 init:
-REM nacitanie zapamatovanych hodnot
+	gosub init_rtc
 
+; main loop
+main_loop:
+	gosub read_rtc
+	if mins = vLastMin	then main_loop
+	
+	gosub display_time
+	let vLastMin = mins
 
-REM test prebieha nasledujucim sposobom
-REM	- spusti sa pumpa
-REM	- caka sa minutu a kontroluju sa podmienky az do 15 min. ak je vonku zima, vypiname pumpu a koncime. Ak je to ok, cerpame dalej
-TestConditions:
-gosub SolarOn
-gosub PumpOn
-for b0 = 0 to 15
-    pause 60000
-    readtemp iTin, vTin
-    readtemp iTout, vTout
-    b1 = vTout + 1
-    b2 = vTout - 1
-    if vTin < b1 then	;asi je to dobre, cerpame s otvorenym zipsom
+	if vMode = ModeHeat then
+	{
+	}
+	elseif vMode = ModeCool then
+	elsendif
+	
+
+	pause 60000
+	goto main_loop
+
+init_rtc:
+	hi2csetup i2cmaster, %11010000, i2cslow, i2cbyte ; Ds1307 setup
+	;hi2cout 0,(seconds,mins,hour,day,date,month,year,control)
 	return
-    elseif vTin > b2 then
-	;je to zle - vonku je zima
-	exit
-    endif
-next
-REM inak zastavime test
-gosub PumpOff
-return
 
-PumpOn:
-  high oPump
-  return
-PumpOff:
-  high oPump
-  return
-SolarOn: 
-  low oSerSolOff
-  high oSerSolOn
-  pause 1000
-  return
-SolarOff: 
-  low oSerSolOn
-  high oSerSolOff
-  pause 1000
-  return
-  
+; --------
+read_rtc:
+	hi2cin 0,(seconds,mins,hour,day,date,month,year)
+	return
+; --------
+display_time:
+	bcdtoascii day, val1, val2
+	serout oDisplay, N2400, (val1, val2, ",")
+	bcdtoascii month, val1, val2
+	serout oDisplay, N2400, (val1, val2, ".", " ")
+	bcdtoascii hour, val1, val2
+	serout oDisplay, N2400, (val1, val2, ":")
+	bcdtoascii mins, val1, val2
+	serout oDisplay, N2400, (val1, val2)
+	return
