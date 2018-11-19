@@ -1,12 +1,14 @@
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.5
-; date 11.01.2016
+; version 0.6
+; date 05.05.2016
 
 ; ---------------------
 ; symbols
 
 #define use_test
+#define debug_display
+#define debug_serial
 
 ; input pins
 symbol iTin 	= C.0
@@ -18,14 +20,16 @@ symbol iSw3		= C.5
 
 ; output pins
 symbol oDisplay	= B.0
-symbol oSerSolOn	= B.1
-symbol oSerSolOff = B.2
+symbol oSerSolOff	= B.1
+symbol oSerSolOn  = B.2
 symbol oPump	= B.3
 symbol oUVLamp	= B.4
 
 
 symbol hi2csda	= B.5
 symbol hi2cscl	= B.7
+
+symbol oSerDebug	= 0
 
 ; variables
 symbol vMode	= b10
@@ -59,6 +63,7 @@ symbol DefaTmin			= 25
 symbol DefaTmax			= 29
 symbol DefaPumpTime		= 600			; in minutes
 
+symbol TimeSolarOnOff3	= 50000
 
 symbol ModeHeat	= 1
 symbol ModeCool	= 2
@@ -90,6 +95,9 @@ debug_init:
 ; ---------------------
 ; initialization
 init:	
+#ifdef debug_serial
+	serout oSerDebug, N2400, ("init")
+#endif
 	output oPump
 	high oPump
 	output oSerSolOn
@@ -124,11 +132,18 @@ main_loop:
 	gosub display_time
 	let vLastMin = mins
 	debug
+
+#ifdef debug_serial
+	serout oSerDebug, N2400, ("main loop - new minute")
+#endif
 	
 	; pumpujeme, tak testujeme cas
 	let val1 = vStatus & PumpMask
 	if val1 > 0 then
 	{
+	#ifdef debug_serial
+		serout oSerDebug, N2400, ("one minute pump less")
+	#endif
 		dec vRemainigPumpTime
 		if vRemainigPumpTime > 0 then cakaj_main
 		val1 = vStatus & TestMask
@@ -172,13 +187,16 @@ init_rtc:
 read_rtc:
 	hi2cin 0,(seconds,mins,hour,day,date,month,year)
 	return
+	
 ; --------
 display_time:
 	serout oDisplay, N2400, (254, 1)
 	pause 30
-	
+
+	#ifndef debug_display
 	;backligth off
 	serout oDisplay, N2400, (255, 4)
+	#endif
 	
 	bcdtoascii date, val1, val2
 	serout oDisplay, N2400, (val1, val2, ".")
@@ -191,9 +209,19 @@ display_time:
 	
 	serout oDisplay, N2400, (254, 192)
 	serout oDisplay, N2400, ("Ti:", #vTin, " To:", #vTout, " S:", #vStatus)
+	#ifdef debug_serial
+		serout oSerDebug, N2400, (mins, " M:", #vMode, "Ti:", #vTin, " To:", #vTout, " S:", #vStatus)
+	#endif
 	return
+
 ; --------
 read_temperatures:
+	#ifdef debug_display
+		serout oDisplay, N2400, (254, 1)
+		pause 30
+		serout oDisplay, N2400, ("Read temperatures")
+		pause 2000
+	#endif
 	readtemp iTin, vTin
 	if vTin > 127 then
 	{
@@ -207,13 +235,29 @@ read_temperatures:
 	endif
 
 return
+
 ; --------
 pump_on:
+	#ifdef debug_display
+		serout oDisplay, N2400, (254, 1)
+		pause 30
+		serout oDisplay, N2400, ("Pump off->on")
+		pause 1000
+		gosub display_time
+	#endif
 	low oPump;
 	vStatus = vStatus | PumpMask
 	return
+	
 ; --------
 pump_off:
+	#ifdef debug_display
+		serout oDisplay, N2400, (254, 1)
+		pause 30
+		serout oDisplay, N2400, ("Pump on->off")
+		pause 1000
+		gosub display_time
+	#endif
 	high oPump;
 	vStatus = vStatus & NPumpMask
 	return
@@ -222,26 +266,50 @@ pump_off:
 solar_on:
 	val1 = vStatus & SolarMask
 	if val1 > 0 then return endif
+	#ifdef debug_display
+		serout oDisplay, N2400, (254, 1)
+		pause 30
+		serout oDisplay, N2400, ("Solar off->on")
+	#endif
 	low oSerSolOn
-	pause 15000
+	pause TimeSolarOnOff3
+	pause TimeSolarOnOff3
+	pause TimeSolarOnOff3
+	#ifdef debug_display
+		gosub display_time
+	#endif
 	high oSerSolOn
 	vStatus = vStatus | SolarMask
 	return
+	
 	; --------
 solar_off:
 	val1 = vStatus & SolarMask
+	#ifdef debug_display
+		serout oDisplay, N2400, (254, 1)
+		pause 30
+		serout oDisplay, N2400, ("Solar on->off")
+	#endif
 	if val1 = 0 then return endif
 	low oSerSolOff
-	pause 15000
+	pause TimeSolarOnOff3
+	pause TimeSolarOnOff3
+	pause TimeSolarOnOff3
+	#ifdef debug_display
+		gosub display_time
+	#endif
 	high oSerSolOff
 	vStatus = vStatus & NSolarMask
 	return
+	
+	;------------
 test_start:
 	gosub solar_on
 	gosub pump_on
 	vStatus = vStatus | TestMask
 	let vRemainigPumpTime = 10
 	return
+	
 	; -----------
 test_stop:
 	vstatus = vstatus & NTestMask
@@ -268,8 +336,8 @@ test_stop:
 	endif	
 	vMode = ModeHeat
 	return
+	
 	; -----------
-
 init_new_day:
 	; ak je to cez den, nastavime cakanie na novy den
 	if hour >= $10 then
@@ -277,17 +345,20 @@ init_new_day:
 		gosub wait_1hour
 		return
 	endif
+
+	;------------
 start_init_new_day:
 	if hour >= $20 then init_new_day
-	
 	; dame sa do modu Wait a nastavime cakanie na rozumnu hodinu pre test solaru
 	let vMode		= ModeWait
 	let vWaitHour	= $10
 	return
+	
 	; ---------
 wait_1hour:
 	vWaitHour = hour + 1
 	return
+	
 	; -----------
 set_remaining_pump_time:
 	if vTin > 25 then
@@ -298,6 +369,7 @@ set_remaining_pump_time:
 		vRemainigPumpTime = 300
 	endif
 	return
+	
 ;------------
 #ifdef use_test
 test_routine:
