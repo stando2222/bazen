@@ -1,10 +1,12 @@
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.3
+; version 0.4
 ; date 31.10.2015
 
 ; ---------------------
 ; symbols
+
+#define use_test
 
 ; input pins
 symbol iTin 	= C.0
@@ -84,13 +86,18 @@ debug_init:
 	vTmin = DefaTmin
 	vTmax = DefaTmax
 
+
 ; ---------------------
 ; initialization
 init:	
-	output oPump 
+	output oPump
+	high oPump
 	output oSerSolOn
+	high oSerSolOn
 	output oSerSolOff
+	high oSerSolOff
 	output oUVLamp
+	high oUVLamp
 	output oDisplay
 		
 	pullup %11110000000000	;nastavenie pullup rezistorov pre vstupy switchov
@@ -98,6 +105,10 @@ init:
 	gosub init_rtc
 	
 	gosub start_init_new_day
+
+#ifdef use_test
+	gosub test_routine
+#endif
 
 ; main loop
 main_loop:
@@ -196,7 +207,7 @@ read_temperatures:
 return
 ; --------
 pump_on:
-	high oPump;
+	low oPump;
 	vStatus = vStatus | PumpMask
 	return
 ; --------
@@ -209,18 +220,18 @@ pump_off:
 solar_on:
 	val1 = vStatus & SolarMask
 	if val1 > 0 then return endif
-	high oSerSolOn
-	pause 15000
 	low oSerSolOn
+	pause 15000
+	high oSerSolOn
 	vStatus = vStatus | SolarMask
 	return
 	; --------
 solar_off:
 	val1 = vStatus & SolarMask
 	if val1 = 0 then return endif
-	high oSerSolOff
-	pause 15000
 	low oSerSolOff
+	pause 15000
+	high oSerSolOff
 	vStatus = vStatus & NSolarMask
 	return
 test_start:
@@ -285,3 +296,67 @@ set_remaining_pump_time:
 		vRemainigPumpTime = 300
 	endif
 	return
+;------------
+#ifdef use_test
+test_routine:
+	; test rtc and sensors
+	; clear display
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	;backligth on
+	serout oDisplay, N2400, (255, 0)
+	serout oDisplay, N2400, ("Test RTC,Tin,Tou")
+	pause 2000
+	gosub read_rtc
+	gosub read_temperatures
+	gosub display_time
+	pause 2000
+	
+	; relays test
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	;backligth on
+	serout oDisplay, N2400, (255, 0)
+	serout oDisplay, N2400, ("Test SolOn-on")
+	low oSerSolOn
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test SolOn-off")
+	high oSerSolOn
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test SolOff-on")
+	low oSerSolOff
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test SolOff-off")
+	high oSerSolOff
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test Pump-on")
+	low oPump
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test Pump-off")
+	high oPump
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test UVLamp-on")
+	low oUVLamp
+	pause 2000
+	serout oDisplay, N2400, (254, 1)
+	pause 30
+	serout oDisplay, N2400, ("Test UVLamp-off")
+	high oUVLamp
+	pause 2000
+	
+	; testing switches
+	
+	return
+#endif
