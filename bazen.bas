@@ -1,7 +1,7 @@
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.4
-; date 31.10.2015
+; version 0.5
+; date 11.01.2016
 
 ; ---------------------
 ; symbols
@@ -142,11 +142,13 @@ main_loop:
 	}
 	endif
 	
+	; ak mame drzat teplotu, tak ???
 	if vMode = ModeKeep and hour >= vWaitHour then
 		gosub pump_on
 		goto cakaj_main
 	endif	
 
+	; start noveho dna
 	if vMode = ModeEndDay and hour < $5 then
 		gosub init_new_day
 		goto cakaj_main
@@ -243,16 +245,16 @@ test_start:
 	; -----------
 test_stop:
 	vstatus = vstatus & NTestMask
+	gosub set_remaining_pump_time
 	if vTin > vTMax then
+		; chceme chladit
 		vMode = ModeCool
-		gosub set_remaining_pump_time
 		vWaitHour = $23
 		gosub pump_off
 		return
 	endif
 	val1 = vTout - 2
 	if vTin >= vTmin and vTin <= vTmax or vTin > val1 and hour => $23 then
-		gosub set_remaining_pump_time
 		gosub solar_off
 		vMode = ModeKeep
 		return
@@ -262,8 +264,8 @@ test_stop:
 		; tuto cakame na pocasie	
 		gosub pump_off
 		gosub wait_1hour
+		return
 	endif	
-	gosub set_remaining_pump_time
 	vMode = ModeHeat
 	return
 	; -----------
