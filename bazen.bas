@@ -1,6 +1,6 @@
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.6
+; version 0.7
 ; date 05.05.2016
 
 ; ---------------------
@@ -9,6 +9,7 @@
 #define use_test
 #define debug_display
 #define debug_serial
+#define debug_inputs
 
 ; input pins
 symbol iTin 	= C.0
@@ -58,7 +59,7 @@ symbol year		= b6
 symbol val1		= b7
 symbol val2		= b8
 
-
+; default values
 symbol DefaTmin			= 25
 symbol DefaTmax			= 29
 symbol DefaPumpTime		= 600			; in minutes
@@ -178,14 +179,34 @@ cakaj_main:
 	pause 50000
 	goto main_loop
 
+; -------
 init_rtc:
+#ifdef debug_inputs
+	let seconds = 0
+	let mins = 0x0
+	let hour = 0x9
+	let day = 0x1
+	let date = 0x12
+	let month = 0x12
+	let year = 0x18
+#else
 	hi2csetup i2cmaster, %11010000, i2cslow, i2cbyte ; Ds1307 setup
 	;hi2cout 0,(seconds,mins,hour,day,date,month,year,control)
+#endif
 	return 
 
 ; --------
 read_rtc:
+#ifdef debug_inputs
+	if mins >= 60 then
+		inc hour
+		mins = 0
+	else	
+		inc mins
+	endif	
+#else
 	hi2cin 0,(seconds,mins,hour,day,date,month,year)
+#endif
 	return
 	
 ; --------
@@ -222,17 +243,22 @@ read_temperatures:
 		serout oDisplay, N2400, ("Read temperatures")
 		pause 2000
 	#endif
-	readtemp iTin, vTin
-	if vTin > 127 then
-	{
-		vTin = vTin - 128
-	}
-	endif
+	#ifdef debug_inputs
+		let vTin = 25
+		let vTout= 26
+	#else
+		readtemp iTin, vTin
+		if vTin > 127 then
+		{
+			vTin = vTin - 128
+		}
+		endif
 
-	readtemp iTout, vTout
-	if vTout > 127 then
-		vTout = vTout - 128
-	endif
+		readtemp iTout, vTout
+		if vTout > 127 then
+			vTout = vTout - 128
+		endif
+	#endif
 
 return
 

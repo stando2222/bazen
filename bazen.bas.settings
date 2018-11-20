@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-16"?>
 <DocumentSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <FindHistory>
-    <string>serout</string>
-    <string>oSer</string>
-    <string>vremain</string>
-    <string>Remain</string>
-    <string>remaiing</string>
-    <string>b16</string>
-    <string>vTin</string>
-    <string>OnOff</string>
-    <string>sleep</string>
-    <string>test_start</string>
+    <string>debug_in</string>
+    <string>vtin</string>
+    <string>max</string>
+    <string>tin</string>
+    <string />
+    <string>vTi</string>
+    <string>display</string>
+    <string>read_tempe</string>
+    <string>read</string>
+    <string>read_tem</string>
   </FindHistory>
   <ReplaceHistory />
   <ReplaceSearchHistory />
@@ -18,7 +18,7 @@
   <BreakPoints />
   <SelectedLine>0</SelectedLine>
   <SelectedColumn>0</SelectedColumn>
-  <CaretOffset>3932</CaretOffset>
+  <CaretOffset>8411</CaretOffset>
   <BottomVerticalSplitterPosition>0</BottomVerticalSplitterPosition>
   <TopVerticalSplitterPosition>0</TopVerticalSplitterPosition>
   <HorizontalSplitterPosition>0</HorizontalSplitterPosition>
