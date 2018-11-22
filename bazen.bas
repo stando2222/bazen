@@ -1,7 +1,7 @@
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.7
-; date 05.05.2016
+; version 0.8
+; date 20.11.2018
 
 ; ---------------------
 ; symbols
@@ -245,7 +245,7 @@ read_temperatures:
 	#endif
 	#ifdef debug_inputs
 		let vTin = 25
-		let vTout= 26
+		let vTout= 28
 	#else
 		readtemp iTin, vTin
 		if vTin > 127 then
