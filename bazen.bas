@@ -1,15 +1,17 @@
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.8
-; date 20.11.2018
+; version 0.9
+; date 26.11.2018
 
 ; ---------------------
-; symbols
 
 #define use_test
 #define debug_display
-#define debug_serial
-#define debug_inputs
+#define simulate_inputs
+
+; symbols
+; misc
+symbol displaySpeed = N2400
 
 ; input pins
 symbol iTin 	= C.0
@@ -29,8 +31,6 @@ symbol oUVLamp	= B.4
 
 symbol hi2csda	= B.5
 symbol hi2cscl	= B.7
-
-symbol oSerDebug	= 0
 
 ; variables
 symbol vMode	= b10
@@ -81,24 +81,16 @@ symbol NUVMask	= %11111101
 symbol NTestMask	= %11111011
 symbol NSolarMask = %11110111
 
-
-
-; debug start
-debug_init:
-
-	pause 1000
-	
+; ---------------------	
 ; temporary init
+; ---------------------
 	vTmin = DefaTmin
 	vTmax = DefaTmax
 
 
 ; ---------------------
 ; initialization
-init:	
-#ifdef debug_serial
-	serout oSerDebug, N2400, ("init")
-#endif
+; ---------------------
 	output oPump
 	high oPump
 	output oSerSolOn
@@ -133,18 +125,11 @@ main_loop:
 	gosub display_time
 	let vLastMin = mins
 	debug
-
-#ifdef debug_serial
-	serout oSerDebug, N2400, ("main loop - new minute")
-#endif
 	
 	; pumpujeme, tak testujeme cas
 	let val1 = vStatus & PumpMask
 	if val1 > 0 then
 	{
-	#ifdef debug_serial
-		serout oSerDebug, N2400, ("one minute pump less")
-	#endif
 		dec vRemainigPumpTime
 		if vRemainigPumpTime > 0 then cakaj_main
 		val1 = vStatus & TestMask
@@ -181,7 +166,7 @@ cakaj_main:
 
 ; -------
 init_rtc:
-#ifdef debug_inputs
+#ifdef simulate_inputs
 	let seconds = 0
 	let mins = 0x0
 	let hour = 0x9
@@ -197,7 +182,7 @@ init_rtc:
 
 ; --------
 read_rtc:
-#ifdef debug_inputs
+#ifdef simulate_inputs
 	if mins >= 60 then
 		inc hour
 		mins = 0
@@ -211,39 +196,36 @@ read_rtc:
 	
 ; --------
 display_time:
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
 
 	#ifndef debug_display
 	;backligth off
-	serout oDisplay, N2400, (255, 4)
+	serout oDisplay, displaySpeed, (255, 4)
 	#endif
 	
 	bcdtoascii date, val1, val2
-	serout oDisplay, N2400, (val1, val2, ".")
+	serout oDisplay, displaySpeed, (val1, val2, ".")
 	bcdtoascii month, val1, val2
-	serout oDisplay, N2400, (val1, val2, ".", " ")
+	serout oDisplay, displaySpeed, (val1, val2, ".", " ")
 	bcdtoascii hour, val1, val2
-	serout oDisplay, N2400, (val1, val2, ":")
+	serout oDisplay, displaySpeed, (val1, val2, ":")
 	bcdtoascii mins, val1, val2
-	serout oDisplay, N2400, (val1, val2, " M:" , #vMode)
+	serout oDisplay, displaySpeed, (val1, val2, " M:" , #vMode)
 	
-	serout oDisplay, N2400, (254, 192)
-	serout oDisplay, N2400, ("Ti:", #vTin, " To:", #vTout, " S:", #vStatus)
-	#ifdef debug_serial
-		serout oSerDebug, N2400, (mins, " M:", #vMode, "Ti:", #vTin, " To:", #vTout, " S:", #vStatus)
-	#endif
+	serout oDisplay, displaySpeed, (254, 192)
+	serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout, " S:", #vStatus)
 	return
 
 ; --------
 read_temperatures:
 	#ifdef debug_display
-		serout oDisplay, N2400, (254, 1)
+		serout oDisplay, displaySpeed, (254, 1)
 		pause 30
-		serout oDisplay, N2400, ("Read temperatures")
+		serout oDisplay, displaySpeed, ("Read temperatures")
 		pause 2000
 	#endif
-	#ifdef debug_inputs
+	#ifdef simulate_inputs
 		let vTin = 25
 		let vTout= 28
 	#else
@@ -265,9 +247,9 @@ return
 ; --------
 pump_on:
 	#ifdef debug_display
-		serout oDisplay, N2400, (254, 1)
+		serout oDisplay, displaySpeed, (254, 1)
 		pause 30
-		serout oDisplay, N2400, ("Pump off->on")
+		serout oDisplay, displaySpeed, ("Pump off->on")
 		pause 1000
 		gosub display_time
 	#endif
@@ -278,9 +260,9 @@ pump_on:
 ; --------
 pump_off:
 	#ifdef debug_display
-		serout oDisplay, N2400, (254, 1)
+		serout oDisplay, displaySpeed, (254, 1)
 		pause 30
-		serout oDisplay, N2400, ("Pump on->off")
+		serout oDisplay, displaySpeed, ("Pump on->off")
 		pause 1000
 		gosub display_time
 	#endif
@@ -293,9 +275,9 @@ solar_on:
 	val1 = vStatus & SolarMask
 	if val1 > 0 then return endif
 	#ifdef debug_display
-		serout oDisplay, N2400, (254, 1)
+		serout oDisplay, displaySpeed, (254, 1)
 		pause 30
-		serout oDisplay, N2400, ("Solar off->on")
+		serout oDisplay, displaySpeed, ("Solar off->on")
 	#endif
 	low oSerSolOn
 	pause TimeSolarOnOff3
@@ -312,9 +294,9 @@ solar_on:
 solar_off:
 	val1 = vStatus & SolarMask
 	#ifdef debug_display
-		serout oDisplay, N2400, (254, 1)
+		serout oDisplay, displaySpeed, (254, 1)
 		pause 30
-		serout oDisplay, N2400, ("Solar on->off")
+		serout oDisplay, displaySpeed, ("Solar on->off")
 	#endif
 	if val1 = 0 then return endif
 	low oSerSolOff
@@ -401,11 +383,11 @@ set_remaining_pump_time:
 test_routine:
 	; test rtc and sensors
 	; clear display
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
 	;backligth on
-	serout oDisplay, N2400, (255, 0)
-	serout oDisplay, N2400, ("Test RTC,Tin,Tou")
+	serout oDisplay, displaySpeed, (255, 0)
+	serout oDisplay, displaySpeed, ("Test RTC,Tin,Tou")
 	pause 2000
 	gosub read_rtc
 	gosub read_temperatures
@@ -413,46 +395,46 @@ test_routine:
 	pause 2000
 	
 	; relays test
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
 	;backligth on
-	serout oDisplay, N2400, (255, 0)
-	serout oDisplay, N2400, ("Test SolOn-on")
+	serout oDisplay, displaySpeed, (255, 0)
+	serout oDisplay, displaySpeed, ("Test SolOn-on")
 	low oSerSolOn
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test SolOn-off")
+	serout oDisplay, displaySpeed, ("Test SolOn-off")
 	high oSerSolOn
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test SolOff-on")
+	serout oDisplay, displaySpeed, ("Test SolOff-on")
 	low oSerSolOff
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test SolOff-off")
+	serout oDisplay, displaySpeed, ("Test SolOff-off")
 	high oSerSolOff
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test Pump-on")
+	serout oDisplay, displaySpeed, ("Test Pump-on")
 	low oPump
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test Pump-off")
+	serout oDisplay, displaySpeed, ("Test Pump-off")
 	high oPump
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test UVLamp-on")
+	serout oDisplay, displaySpeed, ("Test UVLamp-on")
 	low oUVLamp
 	pause 2000
-	serout oDisplay, N2400, (254, 1)
+	serout oDisplay, displaySpeed, (254, 1)
 	pause 30
-	serout oDisplay, N2400, ("Test UVLamp-off")
+	serout oDisplay, displaySpeed, ("Test UVLamp-off")
 	high oUVLamp
 	pause 2000
 	
