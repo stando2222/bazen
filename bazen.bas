@@ -1,15 +1,16 @@
+
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.9
+; version 0.10
 ; date 26.11.2018
-
+; genereal revision - all flow is due to vMode
 ; ---------------------
 
 #define use_test
-#define debug_display
+;#define debug_display
 #define simulate_inputs
 
-; symbols
+; ---------- symbols ---------------
 ; misc
 symbol displaySpeed = N2400
 
@@ -32,7 +33,7 @@ symbol oUVLamp	= B.4
 symbol hi2csda	= B.5
 symbol hi2cscl	= B.7
 
-; variables
+; ---------------- variables -------------------
 symbol vMode	= b10
 symbol vStatus	= b11
 symbol vLastMin	= b12
@@ -42,10 +43,12 @@ symbol vLastSolar = b15
 symbol vTmin	= b16
 symbol vTmax	= b17
 symbol vWaitHour	= b18
-;b19
+symbol vSubMode   = b19
 
 symbol vRemainigPumpTime	= w10			; in minutes
 symbol vDayPumpTime		= w11
+;w12
+;w13
 
 ; temporary - !!!! max b9
 symbol seconds	= b0
@@ -66,6 +69,7 @@ symbol DefaPumpTime		= 600			; in minutes
 
 symbol TimeSolarOnOff3	= 50000
 
+; mode symbols
 symbol ModeHeat	= 1
 symbol ModeCool	= 2
 symbol ModeKeep	= 3
@@ -76,10 +80,19 @@ symbol PumpMask	= %00000001
 symbol UVMask	= %00000010
 symbol TestMask	= %00000100
 symbol SolarMask	= %00001000
+symbol ServoToOn  = %00010000
+symbol ServoToOff = %00100000
 symbol NPumpMask	= %11111110
 symbol NUVMask	= %11111101
 symbol NTestMask	= %11111011
 symbol NSolarMask = %11110111
+symbol NServoToOn = %11101111
+symbol NServoToOff= %11011111
+
+
+; submode symbols
+symbol SModePumpONOFF	= 1
+symbol SModePumpOFFON	= 2
 
 ; ---------------------	
 ; temporary init
@@ -102,6 +115,7 @@ symbol NSolarMask = %11110111
 	output oDisplay
 		
 	pullup %11110000000000	;nastavenie pullup rezistorov pre vstupy switchov
+
 	
 	gosub init_rtc
 	
@@ -114,18 +128,21 @@ symbol NSolarMask = %11110111
 ; main loop
 main_loop:
 	gosub read_rtc
+	
+	gosub display_info
+		
+	
+	; waiting for new minute
 	if mins = vLastMin then
 	{  
 	   pause 1000
 	   goto main_loop
 	}
 	endif
-
-	gosub read_temperatures
-	gosub display_time
-	let vLastMin = mins
-	debug
 	
+	; --- toto len ak to naozaj zmeriame: gosub read_temperatures
+	
+
 	; pumpujeme, tak testujeme cas
 	let val1 = vStatus & PumpMask
 	if val1 > 0 then
@@ -178,6 +195,8 @@ init_rtc:
 	hi2csetup i2cmaster, %11010000, i2cslow, i2cbyte ; Ds1307 setup
 	;hi2cout 0,(seconds,mins,hour,day,date,month,year,control)
 #endif
+	gosub read_rtc
+	vLastMin = mins - 1 
 	return 
 
 ; --------
@@ -211,10 +230,60 @@ display_time:
 	bcdtoascii hour, val1, val2
 	serout oDisplay, displaySpeed, (val1, val2, ":")
 	bcdtoascii mins, val1, val2
-	serout oDisplay, displaySpeed, (val1, val2, " M:" , #vMode)
-	
+	;serout oDisplay, displaySpeed, (val1, val2, " M:" , #vMode)
 	serout oDisplay, displaySpeed, (254, 192)
-	serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout, " S:", #vStatus)
+	return
+	
+; --------
+display_info:
+
+	gosub display_time
+	
+	; kazdu 2 sekundu teploty
+	val1 = seconds % 10
+	val2 = val1 % 2
+	if val2 = 0 then
+		serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout)
+	endif
+
+	if val1 = 1 then
+		serout oDisplay, displaySpeed, ("M:" , #vMode, " S:", #vStatus)
+		return
+	elseif val1 = 3 then
+		val2 = vStatus & TestMask
+		if val2 > 0 then
+			serout oDisplay, displaySpeed, ("Test run")
+			return
+		endif
+	elseif val1 = 5 then
+		val2 = vStatus & PumpMask
+		if val2 > 0 then
+				serout oDisplay, displaySpeed, ("Pump run")
+				return
+		endif
+	elseif val1 = 7 then
+		val2 = vStatus & UVMask
+		if val2 > 0 then
+			serout oDisplay, displaySpeed, ("UV run")
+			return
+		endif
+	elseif val1 = 9 then
+		val2 = vStatus & SolarMask
+		if val2 > 0 then
+			serout oDisplay, displaySpeed, ("Solar is on")
+			return
+		endif
+		val2 = vStatus & ServoToOn
+		if val2 > 0 then
+			serout oDisplay, displaySpeed, ("Servo off -> on")
+			return
+		endif
+		val2 = vStatus & ServoToOff
+		if val2 > 0 then
+			serout oDisplay, displaySpeed, ("Servo on -> off")
+			return
+		endif
+	endif
 	return
 
 ; --------
@@ -246,26 +315,12 @@ return
 
 ; --------
 pump_on:
-	#ifdef debug_display
-		serout oDisplay, displaySpeed, (254, 1)
-		pause 30
-		serout oDisplay, displaySpeed, ("Pump off->on")
-		pause 1000
-		gosub display_time
-	#endif
 	low oPump;
 	vStatus = vStatus | PumpMask
 	return
 	
 ; --------
 pump_off:
-	#ifdef debug_display
-		serout oDisplay, displaySpeed, (254, 1)
-		pause 30
-		serout oDisplay, displaySpeed, ("Pump on->off")
-		pause 1000
-		gosub display_time
-	#endif
 	high oPump;
 	vStatus = vStatus & NPumpMask
 	return
@@ -274,18 +329,10 @@ pump_off:
 solar_on:
 	val1 = vStatus & SolarMask
 	if val1 > 0 then return endif
-	#ifdef debug_display
-		serout oDisplay, displaySpeed, (254, 1)
-		pause 30
-		serout oDisplay, displaySpeed, ("Solar off->on")
-	#endif
 	low oSerSolOn
 	pause TimeSolarOnOff3
 	pause TimeSolarOnOff3
 	pause TimeSolarOnOff3
-	#ifdef debug_display
-		gosub display_time
-	#endif
 	high oSerSolOn
 	vStatus = vStatus | SolarMask
 	return
@@ -303,9 +350,6 @@ solar_off:
 	pause TimeSolarOnOff3
 	pause TimeSolarOnOff3
 	pause TimeSolarOnOff3
-	#ifdef debug_display
-		gosub display_time
-	#endif
 	high oSerSolOff
 	vStatus = vStatus & NSolarMask
 	return
@@ -391,7 +435,7 @@ test_routine:
 	pause 2000
 	gosub read_rtc
 	gosub read_temperatures
-	gosub display_time
+
 	pause 2000
 	
 	; relays test
