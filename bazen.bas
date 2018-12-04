@@ -1,9 +1,9 @@
 
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.11
-; date 3.12.2018
-; partial step to general revision - all flow due to vMode
+; version 0.12
+; date 4.12.2018
+; partial step 2 to general refaktoring - main loop every 1 sec - vStatus and all flow due to vMode
 ; ---------------------
 
 ;#define use_test
@@ -141,24 +141,25 @@ main_loop:
 	}
 	endif
 	
-	; --- toto len ak to naozaj zmeriame: gosub read_temperatures
+	gosub read_temperatures
 
-	; pending servo
+	; handling pending servo
 	val1 = vStatus & ServoToOn 
 	if val1 > 0 then
 		dec vWaitMin
-		if vWaitMin <= 0 then
-			vStatus = vStatus | SolarMask
-		endif
-		goto main_loop
+		if vWaitMin > 0 then main_loop
+		vStatus = vStatus | SolarMask
+		vStatus = vStatus & NServoToOn
+		high oSerSolOn 
 	endif
+
 	val1 = vStatus & ServoToOFF 
 	if val1 > 0 then
 		dec vWaitMin
-		if vWaitMin <= 0 then
-			vStatus = vStatus & nSolarMask
-		endif  
-		goto main_loop
+		if vWaitMin > 0 then main_loop
+		vStatus = vStatus & NSolarMask
+		vStatus = vStatus & NServoToOff
+		high oSerSolOff		
 	endif
 	
 
@@ -166,7 +167,7 @@ main_loop:
 	let val1 = vStatus & PumpMask
 	if val1 > 0 then
 	{
-		gosub read_temperatures
+		; gosub read_temperatures
 		dec vRemainigPumpTime
 		if vRemainigPumpTime > 0 then main_loop
 		val1 = vStatus & TestMask
@@ -202,13 +203,13 @@ main_loop:
 ; -------
 init_rtc:
 #ifdef simulate_inputs
-	let seconds = 0
-	let mins = 0x0
-	let hour = 0x9
-	let day = 0x1
-	let date = 0x12
-	let month = 0x12
-	let year = 0x18
+	let seconds = $00
+	let mins = 	$55
+	let hour = 	$09
+	let day = 	$01
+	let date = 	$11
+	let month = $12
+	let year = 	$18
 #else
 	hi2csetup i2cmaster, %11010000, i2cslow, i2cbyte ; Ds1307 setup
 	;hi2cout 0,(seconds,mins,hour,day,date,month,year,control)
@@ -220,12 +221,26 @@ init_rtc:
 ; --------
 read_rtc:
 #ifdef simulate_inputs
-	if mins >= 60 then
-		inc hour
+	{
+	if mins >= $59 then
+		val1 = hour % $10
+		if val1 = $09 then
+			hour = hour + $07
+		else
+			inc hour
+		endif
 		mins = 0
 	else	
-		inc mins
-	endif	
+		val1 = mins % $10
+		if val1 = $09 then
+			mins = mins + $07
+		else
+			inc mins
+		endif
+	endif
+	inc seconds
+	seconds = seconds % 10
+	}
 #else
 	hi2cin 0,(seconds,mins,hour,day,date,month,year)
 #endif
@@ -244,10 +259,12 @@ display_time:
 	bcdtoascii date, val1, val2
 	serout oDisplay, displaySpeed, (val1, val2, ".")
 	bcdtoascii month, val1, val2
-	serout oDisplay, displaySpeed, (val1, val2, ".", " ")
+	serout oDisplay, displaySpeed, (val1, val2, " ")
 	bcdtoascii hour, val1, val2
 	serout oDisplay, displaySpeed, (val1, val2, ":")
 	bcdtoascii mins, val1, val2
+	serout oDisplay, displaySpeed, (val1, val2, ":")
+	bcdtoascii seconds, val1, val2
 	serout oDisplay, displaySpeed, (val1, val2)
 	serout oDisplay, displaySpeed, (254, 192)
 	return
@@ -261,31 +278,32 @@ display_info:
 	val1 = seconds % 10
 	val2 = val1 % 2
 	if val2 = 0 then
-		serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout, " ")
+		serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout)
+		return
 	endif
 
 	if val1 = 3 then
 		val2 = vStatus & TestMask
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("Test run")
+			serout oDisplay, displaySpeed, ("Test running")
 			return
 		endif
 	elseif val1 = 5 then
 		val2 = vStatus & PumpMask
 		if val2 > 0 then
-				serout oDisplay, displaySpeed, ("Pump run")
-				return
+			serout oDisplay, displaySpeed, ("Pump on, remain: ", #vRemainigPumpTime)
+			return
 		endif
 	elseif val1 = 7 then
 		val2 = vStatus & UVMask
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("UV run")
+			serout oDisplay, displaySpeed, ("UV on")
 			return
 		endif
 	elseif val1 = 9 then
 		val2 = vStatus & SolarMask
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("Solar is on")
+			serout oDisplay, displaySpeed, ("Solar on")
 			return
 		endif
 		val2 = vStatus & ServoToOn
@@ -301,6 +319,12 @@ display_info:
 	endif
 	
 	; default
+	val1 = vMode & ModeWait
+	if val1 > 0 then
+		bcdtoascii vWaitHour, val1, val2
+		serout oDisplay, displaySpeed, ("Waiting for " , val1, val2)
+		return
+	endif	
 	serout oDisplay, displaySpeed, ("M:" , #vMode, " S:", #vStatus)
 	return
 
@@ -351,7 +375,6 @@ solar_on:
 solar_off:
 	val1 = vStatus & SolarMask
 	if val1 = 0 then return endif
-	val1 = vStatus & ServoToOn
 	low oSerSolOff
 	vStatus = vstatus & NServoToOn
 	vStatus = vStatus | ServoToOff
@@ -412,7 +435,12 @@ start_init_new_day:
 	
 	; ---------
 wait_1hour:
-	vWaitHour = hour + 1
+	val1 = hour % $10
+	if val1 = $09 then
+		vWaitHour = vWaithour + $07
+	else
+		vWaitHour = hour + 1
+	endif
 	return
 	
 	; -----------
