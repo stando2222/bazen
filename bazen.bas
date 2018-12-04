@@ -1,12 +1,12 @@
 
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.10
-; date 26.11.2018
-; genereal revision - all flow is due to vMode
+; version 0.11
+; date 3.12.2018
+; partial step to general revision - all flow due to vMode
 ; ---------------------
 
-#define use_test
+;#define use_test
 ;#define debug_display
 #define simulate_inputs
 
@@ -44,10 +44,11 @@ symbol vTmin	= b16
 symbol vTmax	= b17
 symbol vWaitHour	= b18
 symbol vSubMode   = b19
+symbol vWaitMin	= b20
+;b21
 
-symbol vRemainigPumpTime	= w10			; in minutes
-symbol vDayPumpTime		= w11
-;w12
+symbol vRemainigPumpTime	= w11			; in minutes
+symbol vDayPumpTime		= w12
 ;w13
 
 ; temporary - !!!! max b9
@@ -67,7 +68,7 @@ symbol DefaTmin			= 25
 symbol DefaTmax			= 29
 symbol DefaPumpTime		= 600			; in minutes
 
-symbol TimeSolarOnOff3	= 50000
+symbol TimeSolarServo		= 1
 
 ; mode symbols
 symbol ModeHeat	= 1
@@ -141,44 +142,61 @@ main_loop:
 	endif
 	
 	; --- toto len ak to naozaj zmeriame: gosub read_temperatures
+
+	; pending servo
+	val1 = vStatus & ServoToOn 
+	if val1 > 0 then
+		dec vWaitMin
+		if vWaitMin <= 0 then
+			vStatus = vStatus | SolarMask
+		endif
+		goto main_loop
+	endif
+	val1 = vStatus & ServoToOFF 
+	if val1 > 0 then
+		dec vWaitMin
+		if vWaitMin <= 0 then
+			vStatus = vStatus & nSolarMask
+		endif  
+		goto main_loop
+	endif
 	
 
 	; pumpujeme, tak testujeme cas
 	let val1 = vStatus & PumpMask
 	if val1 > 0 then
 	{
+		gosub read_temperatures
 		dec vRemainigPumpTime
-		if vRemainigPumpTime > 0 then cakaj_main
+		if vRemainigPumpTime > 0 then main_loop
 		val1 = vStatus & TestMask
 		if val1 > 0 then
 			gosub test_stop
-			goto cakaj_main
+			goto main_loop
 		endif
 		; tu sme skoncili s cerpanim, cakajme na nasledujuci den
 		gosub init_new_day
-		goto cakaj_main
+		goto main_loop
 	}
 	endif
 	
 	; ak mame drzat teplotu, tak ???
 	if vMode = ModeKeep and hour >= vWaitHour then
 		gosub pump_on
-		goto cakaj_main
+		goto main_loop
 	endif	
 
 	; start noveho dna
 	if vMode = ModeEndDay and hour < $5 then
 		gosub init_new_day
-		goto cakaj_main
+		goto main_loop
 	endif
 
 	if vMode = ModeWait and hour >= vWaitHour then
 		gosub test_start
-		goto cakaj_main
+		goto main_loop
 	endif
 	
-cakaj_main:
-	pause 50000
 	goto main_loop
 
 ; -------
@@ -230,7 +248,7 @@ display_time:
 	bcdtoascii hour, val1, val2
 	serout oDisplay, displaySpeed, (val1, val2, ":")
 	bcdtoascii mins, val1, val2
-	;serout oDisplay, displaySpeed, (val1, val2, " M:" , #vMode)
+	serout oDisplay, displaySpeed, (val1, val2)
 	serout oDisplay, displaySpeed, (254, 192)
 	return
 	
@@ -243,13 +261,10 @@ display_info:
 	val1 = seconds % 10
 	val2 = val1 % 2
 	if val2 = 0 then
-		serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout)
+		serout oDisplay, displaySpeed, ("Ti:", #vTin, " To:", #vTout, " ")
 	endif
 
-	if val1 = 1 then
-		serout oDisplay, displaySpeed, ("M:" , #vMode, " S:", #vStatus)
-		return
-	elseif val1 = 3 then
+	if val1 = 3 then
 		val2 = vStatus & TestMask
 		if val2 > 0 then
 			serout oDisplay, displaySpeed, ("Test run")
@@ -284,16 +299,13 @@ display_info:
 			return
 		endif
 	endif
+	
+	; default
+	serout oDisplay, displaySpeed, ("M:" , #vMode, " S:", #vStatus)
 	return
 
 ; --------
 read_temperatures:
-	#ifdef debug_display
-		serout oDisplay, displaySpeed, (254, 1)
-		pause 30
-		serout oDisplay, displaySpeed, ("Read temperatures")
-		pause 2000
-	#endif
 	#ifdef simulate_inputs
 		let vTin = 25
 		let vTout= 28
@@ -330,28 +342,20 @@ solar_on:
 	val1 = vStatus & SolarMask
 	if val1 > 0 then return endif
 	low oSerSolOn
-	pause TimeSolarOnOff3
-	pause TimeSolarOnOff3
-	pause TimeSolarOnOff3
-	high oSerSolOn
-	vStatus = vStatus | SolarMask
+	vStatus = vstatus & NServoToOff
+	vStatus = vStatus | ServoToOn
+	vWaitMin = TimeSolarServo
 	return
 	
 	; --------
 solar_off:
 	val1 = vStatus & SolarMask
-	#ifdef debug_display
-		serout oDisplay, displaySpeed, (254, 1)
-		pause 30
-		serout oDisplay, displaySpeed, ("Solar on->off")
-	#endif
 	if val1 = 0 then return endif
+	val1 = vStatus & ServoToOn
 	low oSerSolOff
-	pause TimeSolarOnOff3
-	pause TimeSolarOnOff3
-	pause TimeSolarOnOff3
-	high oSerSolOff
-	vStatus = vStatus & NSolarMask
+	vStatus = vstatus & NServoToOn
+	vStatus = vStatus | ServoToOff
+	vWaitMin = TimeSolarServo
 	return
 	
 	;------------
