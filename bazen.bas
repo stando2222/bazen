@@ -1,8 +1,8 @@
 
 #picaxe 20M2
 ; Regulacia bazenu
-; version 0.12
-; date 4.12.2018
+; version 0.13
+; date 3.1.2019
 ; partial step 2 to general refaktoring - main loop every 1 sec - vStatus and all flow due to vMode
 ; ---------------------
 
@@ -291,7 +291,7 @@ display_info:
 	elseif val1 = 5 then
 		val2 = vStatus & PumpMask
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("Pump on, remain: ", #vRemainigPumpTime)
+			serout oDisplay, displaySpeed, ("Pump rmin: ", #vRemainigPumpTime)
 			return
 		endif
 	elseif val1 = 7 then
@@ -303,26 +303,23 @@ display_info:
 	elseif val1 = 9 then
 		val2 = vStatus & SolarMask
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("Solar on")
-			return
+			serout oDisplay, displaySpeed, ("Sol on")
 		endif
 		val2 = vStatus & ServoToOn
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("Servo off -> on")
-			return
+			serout oDisplay, displaySpeed, (",Ser 0->1")
 		endif
 		val2 = vStatus & ServoToOff
 		if val2 > 0 then
-			serout oDisplay, displaySpeed, ("Servo on -> off")
-			return
+			serout oDisplay, displaySpeed, (",Ser 1->0")
 		endif
+		return
 	endif
 	
 	; default
-	val1 = vMode & ModeWait
-	if val1 > 0 then
+	if vMode = ModeWait then
 		bcdtoascii vWaitHour, val1, val2
-		serout oDisplay, displaySpeed, ("Waiting for " , val1, val2)
+		serout oDisplay, displaySpeed, ("Wait for " , val1, val2, "h")
 		return
 	endif	
 	serout oDisplay, displaySpeed, ("M:" , #vMode, " S:", #vStatus)
